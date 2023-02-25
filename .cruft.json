@@ -1,0 +1,19 @@
+{
+  "template": "https://github.com/kjappelbaum/cookiecutter-snekpack",
+  "commit": "122d80788a75a057a5f3a94c8792938eb0aa214a",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "package_name": "gptjchem",
+      "package_name_stylized": "gptjchem",
+      "short_description": "GPT-J for chemistry ",
+      "author_name": "Kevin M. Jablonka",
+      "author_email": "mail@kjablonka.com",
+      "github_organization_name": "kjappelbaum",
+      "github_repository_name": "gptchem-gptj",
+      "command_line_interface": "False",
+      "_template": "https://github.com/kjappelbaum/cookiecutter-snekpack"
+    }
+  },
+  "directory": null
+}
