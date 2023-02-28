@@ -2,4 +2,3 @@
 
 """GPT-J for chemistry ."""
 
-from .api import *  # noqa
