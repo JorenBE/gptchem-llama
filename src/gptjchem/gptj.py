@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from torch.cuda.amp import custom_fwd, custom_bwd
 from torch import nn
 import transformers
-from typing import Optional, Union 
+from typing import Optional, Union
 from pathlib import Path
 from datetime import datetime
 import pandas as pd
@@ -15,6 +15,9 @@ from datasets import Dataset, load_dataset
 from torch.utils.data import DataLoader
 from functools import partial
 from gptchem.utils import make_outdir
+import gc
+
+
 class DequantizeAndLinear(torch.autograd.Function):
     """Blockwise dequantization of weights and linear layer."""
 
@@ -187,6 +190,7 @@ tokenizer.pad_token = config.pad_token_id
 tokenizer.padding_side = "left"
 tokenizer.pad_token = tokenizer.eos_token
 
+
 def add_adapters(model, adapter_dim=4, p=0.1):
     """http://arxiv.org/abs/2106.09685"""
     assert adapter_dim > 0
@@ -216,7 +220,7 @@ def add_adapters(model, adapter_dim=4, p=0.1):
             nn.init.zeros_(module.adapter[2].weight)
 
 
-def load_model(path='hivemind/gpt-j-6B-8bit', adapter_dim=4, p=0.1):
+def load_model(path="hivemind/gpt-j-6B-8bit", adapter_dim=4, p=0.1):
     gpt = GPTJForCausalLM.from_pretrained(path, low_cpu_mem_usage=True)
     add_adapters(gpt, adapter_dim=adapter_dim, p=p)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -230,10 +234,18 @@ def tokenize_function(examples, max_length=128):
 
 
 def create_datasets(
-    train_df: pd.DataFrame, test_df: pd.DataFrame, prompt_column: str, completion_column: str, folder: Union[str, Path]
-):  
-    train_df['sentence'] = train_df.apply(lambda row: row[prompt_column] + row[completion_column], axis=1)
-    test_df['sentence'] = test_df.apply(lambda row: row[prompt_column] + row[completion_column], axis=1)
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    prompt_column: str,
+    completion_column: str,
+    folder: Union[str, Path],
+):
+    train_df["sentence"] = train_df.apply(
+        lambda row: row[prompt_column] + row[completion_column], axis=1
+    )
+    test_df["sentence"] = test_df.apply(
+        lambda row: row[prompt_column] + row[completion_column], axis=1
+    )
 
     train_file = Path(folder) / "train.csv"
     test_file = Path(folder) / "test.csv"
@@ -241,15 +253,14 @@ def create_datasets(
     train_df.to_csv(train_file, index=False)
     test_df.to_csv(test_file, index=False)
 
-    dataset = load_dataset('csv', data_files={'train': str(train_file),
-                                              'test': str(test_file)})
+    dataset = load_dataset("csv", data_files={"train": str(train_file), "test": str(test_file)})
     return dataset
 
 
 def tokenize_dataset(datasets, remove_columns=None, max_length=128):
     if remove_columns is None:
         remove_columns = ["sentence"]
-    
+
     curried_tokenize_function = partial(tokenize_function, max_length=max_length)
 
     tokenized_datasets = datasets.map(curried_tokenize_function, batched=True)
@@ -260,16 +271,18 @@ def tokenize_dataset(datasets, remove_columns=None, max_length=128):
 
 def create_dataloaders_from_frames(train_df, test_df: Optional[pd.DataFrame], batch_size=8):
     ds = {
-        'train': GPTJDataset(train_df, tokenizer, max_length=1024) if train_df is not None else None,
-        'test': GPTJDataset(test_df, tokenizer, max_length=1024) if test_df is not None else None
+        "train": GPTJDataset(train_df, tokenizer, max_length=1024)
+        if train_df is not None
+        else None,
+        "test": GPTJDataset(test_df, tokenizer, max_length=1024) if test_df is not None else None,
     }
-    train_dataloader = DataLoader(
-        ds['train'], shuffle=True, batch_size=batch_size
-    ) 
-    test_dataloader = DataLoader(
-        ds['test'], shuffle=False, batch_size=batch_size
-    ) if test_df is not None else None
-    return {'train': train_dataloader, 'test': test_dataloader}
+    train_dataloader = DataLoader(ds["train"], shuffle=True, batch_size=batch_size)
+    test_dataloader = (
+        DataLoader(ds["test"], shuffle=False, batch_size=batch_size)
+        if test_df is not None
+        else None
+    )
+    return {"train": train_dataloader, "test": test_dataloader}
 
 
 class GPTJDataset(Dataset):
@@ -277,28 +290,35 @@ class GPTJDataset(Dataset):
         texts = []
         completion_lens = []
         for i, row in dataframe.iterrows():
-            t = ''.join([row['prompt'], row['completion']])
+            t = "".join([row["prompt"], row["completion"]])
             texts.append(t)
-            l = len(tokenizer.tokenize(row['completion']))
+            l = len(tokenizer.tokenize(row["completion"]))
             completion_lens.append(l)
-        
-        tokens = tokenizer(texts, truncation=True, padding = True, max_length=max_length, return_tensors='pt')
-        self.input_ids = tokens['input_ids']
-        self.attention_mask = tokens['attention_mask']
+
+        tokens = tokenizer(
+            texts, truncation=True, padding=True, max_length=max_length, return_tensors="pt"
+        )
+        self.input_ids = tokens["input_ids"]
+        self.attention_mask = tokens["attention_mask"]
         self.labels = []
         for i in range(len(self.input_ids)):
             b_labels = self.input_ids[i].clone()
-            b_labels[:-completion_lens[i]] = -100
+            b_labels[: -completion_lens[i]] = -100
             self.labels.append(b_labels)
 
         self.labels = torch.stack(self.labels)
 
     def __len__(self):
         return len(self.labels)
-    
+
     def __getitem__(self, idx):
-        return {'input_ids': self.input_ids[idx], 'attention_mask': self.attention_mask[idx], 'labels': self.labels[idx]}
-    
+        return {
+            "input_ids": self.input_ids[idx],
+            "attention_mask": self.attention_mask[idx],
+            "labels": self.labels[idx],
+        }
+
+
 def train(
     model,
     train_dataloader,
@@ -307,6 +327,7 @@ def train(
     num_epochs: int = 5,
     lr_decay: float = 0.1,
     filename: Optional[str] = None,
+    gc_optimizer: bool = True,
 ):
     device = model.device
     print(device)
@@ -340,7 +361,7 @@ def train(
                     "state_dict": model.state_dict(),
                     "optimizer": optimizer.state_dict(),
                 }
-                #torch.save(state, filename)
+                # torch.save(state, filename)
 
             batch = {k: v.to(device) for k, v in batch.items()}
 
@@ -368,6 +389,24 @@ def train(
 
             lr_scheduler.step()
             progress_bar.update(1)
+
+    if gc_optimizer:
+        model.eval()
+        optimizer = None
+        lr_scheduler = None
+        scaler = None
+        loss = None
+        out = None
+        batch = None
+        del loss
+        del batch
+        del out
+        del optimizer
+        del lr_scheduler
+        del scaler
+
+        gc.collect()
+        torch.cuda.empty_cache()
 
 
 def complete(
