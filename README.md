@@ -12,12 +12,6 @@
     <a href="https://github.com/kjappelbaum/gptchem-gptj/actions?query=workflow%3ATests">
         <img alt="Tests" src="https://github.com/kjappelbaum/gptchem-gptj/workflows/Tests/badge.svg" />
     </a>
-    <a href="https://pypi.org/project/gptjchem">
-        <img alt="PyPI" src="https://img.shields.io/pypi/v/gptjchem" />
-    </a>
-    <a href="https://pypi.org/project/gptjchem">
-        <img alt="PyPI - Python Version" src="https://img.shields.io/pypi/pyversions/gptjchem" />
-    </a>
     <a href="https://github.com/kjappelbaum/gptchem-gptj/blob/main/LICENSE">
         <img alt="PyPI - License" src="https://img.shields.io/pypi/l/gptjchem" />
     </a>
@@ -27,9 +21,6 @@
     <a href="https://codecov.io/gh/kjappelbaum/gptchem-gptj/branch/main">
         <img src="https://codecov.io/gh/kjappelbaum/gptchem-gptj/branch/main/graph/badge.svg" alt="Codecov status" />
     </a>  
-    <a href="https://github.com/cthoyt/cookiecutter-python-package">
-        <img alt="Cookiecutter template from @cthoyt" src="https://img.shields.io/badge/Cookiecutter-snekpack-blue" /> 
-    </a>
     <a href='https://github.com/psf/black'>
         <img src='https://img.shields.io/badge/code%20style-black-000000.svg' alt='Code style: black' />
     </a>
@@ -41,9 +32,6 @@
 GPT-J for chemistry 
 
 ## 💪 Getting Started
-
-> TODO show in a very small amount of space the **MOST** useful thing your package can do.
-Make it as short as possible! You have an entire set of docs for later.
 
 
 ## 🚀 Installation
@@ -74,11 +62,21 @@ Contributions, whether filing an issue, making a pull request, or forking, are a
 
 The code in this package is licensed under the MIT License.
 
-<!--
+
 ### 📖 Citation
 
-Citation goes here!
--->
+```
+@article{Jablonka_2023,
+	doi = {10.26434/chemrxiv-2023-fw8n4},
+	url = {https://doi.org/10.26434%2Fchemrxiv-2023-fw8n4},
+	year = 2023,
+	month = {feb},
+	publisher = {American Chemical Society ({ACS})},
+	author = {Kevin Maik Jablonka and Philippe Schwaller and Andres Ortega-Guerrero and Berend Smit},
+	title = {Is {GPT}-3 all you need for low-data discovery in chemistry?}
+}
+```
+
 
 <!--
 ### 🎁 Support
