@@ -1,21 +1,21 @@
 """Based on https://github.com/gustavecortal/gpt-j-fine-tuning-example/blob/main/finetune_8bit_models.ipynb"""
-from bitsandbytes.functional import quantize_blockwise, dequantize_blockwise
-from bitsandbytes.optim import Adam8bit
-from tqdm.auto import tqdm
+import gc
+from datetime import datetime
+from functools import partial
+from pathlib import Path
+from typing import Optional, Union
+
+import pandas as pd
 import torch
 import torch.nn.functional as F
-from torch.cuda.amp import custom_fwd, custom_bwd
-from torch import nn
 import transformers
-from typing import Optional, Union
-from pathlib import Path
-from datetime import datetime
-import pandas as pd
+from bitsandbytes.functional import dequantize_blockwise, quantize_blockwise
+from bitsandbytes.optim import Adam8bit
 from datasets import Dataset, load_dataset
+from torch import nn
+from torch.cuda.amp import custom_bwd, custom_fwd
 from torch.utils.data import DataLoader
-from functools import partial
-
-import gc
+from tqdm.auto import tqdm
 
 
 class DequantizeAndLinear(torch.autograd.Function):

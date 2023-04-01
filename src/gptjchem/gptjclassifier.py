@@ -1,20 +1,23 @@
+import gc
 from typing import Optional
+
+import pandas as pd
+import torch
 from gptchem.extractor import ClassificationExtractor
 from gptchem.formatter import ClassificationFormatter
 from gptchem.gpt_classifier import GPTClassifier
-from numpy.typing import ArrayLike
-import pandas as pd
-from gptjchem.gptj import train, create_dataloaders_from_frames, load_model, tokenizer
-import torch
-from tqdm import tqdm
 from more_itertools import chunked
-import gc
+from numpy.typing import ArrayLike
+from tqdm import tqdm
+
+from gptjchem.gptj import create_dataloaders_from_frames, load_model, tokenizer, train
 
 
 class GPTJClassifier(GPTClassifier):
-    """A GPT-J based classifier. 
-    
+    """A GPT-J based classifier.
+
     Fine-tunes GPT-J on a dataset upon call to the fit method."""
+
     def __init__(
         self,
         property_name: str,
