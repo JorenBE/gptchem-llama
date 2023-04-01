@@ -29,7 +29,7 @@
     </a>
 </p>
 
-GPT-J for chemistry 
+GPT-J for chemistry (under construction!)
 
 ## 💪 Getting Started
 
@@ -64,6 +64,8 @@ The code in this package is licensed under the MIT License.
 
 
 ### 📖 Citation
+
+If you find the code useful, please cite
 
 ```
 @article{Jablonka_2023,
