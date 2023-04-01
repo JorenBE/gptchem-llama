@@ -14,7 +14,7 @@ import pandas as pd
 from datasets import Dataset, load_dataset
 from torch.utils.data import DataLoader
 from functools import partial
-from gptchem.utils import make_outdir
+
 import gc
 
 

@@ -12,6 +12,9 @@ import gc
 
 
 class GPTJClassifier(GPTClassifier):
+    """A GPT-J based classifier. 
+    
+    Fine-tunes GPT-J on a dataset upon call to the fit method."""
     def __init__(
         self,
         property_name: str,
@@ -22,6 +25,17 @@ class GPTJClassifier(GPTClassifier):
         inference_batch_size: int = 4,
         inference_max_new_tokens: int = 200,
     ):
+        """Initialize a GPT-J based classifier.
+
+        Args:
+            property_name (str): Name of the property to be predicted
+            querier_settings (Optional[dict], optional): Settings for the Querier. Defaults to None.
+            extractor (ClassificationExtractor, optional): Extractor for the property. Defaults to ClassificationExtractor().
+            batch_size (int, optional): Batch size for fine-tuning. Defaults to 4.
+            tune_settings (Optional[dict], optional): Settings for fine-tuning. Defaults to None.
+            inference_batch_size (int, optional): Batch size for inference. Defaults to 4.
+            inference_max_new_tokens (int, optional): Maximum number of tokens to generate during inference. Defaults to 200.
+        """
         self.property_name = property_name
         self.querier_settings = querier_settings
         self.extractor = extractor
@@ -57,6 +71,8 @@ class GPTJClassifier(GPTClassifier):
         dl = create_dataloaders_from_frames(formatted, None, batch_size=self.batch_size)
         train(self.model, dl["train"], **self.tune_settings)
         dl = None
+        formatted = None
+        df = None
         gc.collect()
 
     def predict(self, X: ArrayLike, temperature=0.7, do_sample=False) -> ArrayLike:
@@ -95,7 +111,6 @@ class GPTJClassifier(GPTClassifier):
                     do_sample=do_sample,
                 )
                 completions.extend([tokenizer.decode(out[i]) for i in range(len(out))])
-        print(completions)
         extracted = [
             self.extractor.extract(completions[i].split("###")[1]) for i in range(len(completions))
         ]
