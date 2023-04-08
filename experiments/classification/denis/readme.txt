@@ -1,0 +1,3 @@
+DFT calculated barrier heights (Gibbs free energy of activation in kcal/mol) for bioorthogonal click reactions. One reaction partner is kept the same (trans-cyclooctene) while substituents on the second (1,2,4,5-tetrazine) are varied. Since this is a rather low level DFT calculation and used for fast screening of approximate activation energies +/- 2 or even 3 kcal/mol would be sufficient.
+
+I currently have 1288 of such values, I split them 3:1 into the set I uploaded and the one I kept.
