@@ -21,7 +21,6 @@ class GPTJClassifier(GPTClassifier):
     def __init__(
         self,
         property_name: str,
-        querier_settings: Optional[dict] = None,
         extractor: ClassificationExtractor = ClassificationExtractor(),
         batch_size: int = 4,
         tune_settings: Optional[dict] = None,
@@ -40,7 +39,6 @@ class GPTJClassifier(GPTClassifier):
             inference_max_new_tokens (int, optional): Maximum number of tokens to generate during inference. Defaults to 200.
         """
         self.property_name = property_name
-        self.querier_settings = querier_settings
         self.extractor = extractor
         self.batch_size = batch_size
         self.tune_settings = tune_settings or {}
@@ -54,6 +52,7 @@ class GPTJClassifier(GPTClassifier):
             num_classes=None,
         )
         self.model = load_model()
+
 
     def _prepare_df(self, X: ArrayLike, y: ArrayLike):
         rows = []
@@ -119,3 +118,5 @@ class GPTJClassifier(GPTClassifier):
         ]
 
         return extracted
+
+
