@@ -38,8 +38,8 @@ def train_test(size, num_classes: int, seed, num_epochs):
 
 
 if __name__ == "__main__":
-    for num_epochs in [4, 8, 14, 20]:
-        for seed in range(5):
+    for seed in range(5):
+        for num_epochs in [4, 8, 14, 20][::-1]:
             for size in [10,  50, 100, 500, 700, 5000, 10000][::-1]:
                 for num_class in num_classes:
                     try:
