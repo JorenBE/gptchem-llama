@@ -77,11 +77,12 @@ class GPTJClassifier(GPTClassifier):
         df = None
         gc.collect()
 
-    def predict(self, X: ArrayLike, temperature=0.7, do_sample=False) -> ArrayLike:
+    def predict(self, X: ArrayLike, temperature=0.0, do_sample=False) -> ArrayLike:
         """Predict property values for a set of molecular representations.
 
         Args:
             X (ArrayLike): Input data (typically array of molecular representations)
+            temperature (float): Inference temperature 
 
         Returns:
             ArrayLike: Predicted property values

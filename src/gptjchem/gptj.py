@@ -220,10 +220,11 @@ def add_adapters(model, adapter_dim=4, p=0.1):
             nn.init.zeros_(module.adapter[2].weight)
 
 
-def load_model(path="hivemind/gpt-j-6B-8bit", adapter_dim=4, p=0.1):
+def load_model(path="hivemind/gpt-j-6B-8bit", adapter_dim=4, p=0.1, device=None):
     gpt = GPTJForCausalLM.from_pretrained(path, low_cpu_mem_usage=True)
     add_adapters(gpt, adapter_dim=adapter_dim, p=p)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
     gpt.to(device)
 
     return gpt

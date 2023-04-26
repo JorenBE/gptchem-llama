@@ -1,7 +1,7 @@
 from typing import Optional
 from .gptjclassifier import GPTJClassifier
-from gptchem.extractor import ClassificationExtractor
-from gptchem.formatter import ClassificationFormatter
+from gptchem.extractor import ClassificationExtractor, RegressionExtractor
+from gptchem.formatter import ClassificationFormatter, RegressionFormatter
 from numpy.typing import ArrayLike
 import numpy as np 
 from gptjchem.gptj import create_dataloaders_from_frames, load_model, tokenizer, train
@@ -9,6 +9,43 @@ import gc
 import torch 
 from tqdm import tqdm
 from more_itertools import chunked
+
+class GPTRegressor(GPTJClassifier):
+    """Approximate regression by predicting rounded floats"""
+    
+    def __init__(self, 
+        property_name: str,
+        extractor: RegressionExtractor = RegressionExtractor(),
+        batch_size: int = 4,
+        tune_settings: Optional[dict] = None,
+        inference_batch_size: int = 4,
+          inference_max_new_tokens: int = 200,
+        num_digits: int = 2):
+        """Initialize a GPT-J based regressor
+
+        Arg: 
+            property_name (str): Name of the property to be predicted
+            extractor (RegressionExtractor): Extractor for the property
+            batch_size (int, optional): Batch size for fine-tuning. Defaults to 4.
+            tune_settings (Optional[dict], optional): Settings for fine-tuning. Defaults to None.
+            inference_batch_size (int, optional): Batch size for inference. Defaults to 4.
+            inference_max_new_tokens (int, optional): Maximum number of tokens to generate during inference. Defaults to 200.
+            num_digits (int): Number of digits the completions will be rounded to.
+        """
+        self.property_name = property_name
+        self.extractor = extractor
+        self.batch_size = batch_size
+        self.tune_settings = tune_settings or {}
+        self.inference_batch_size = inference_batch_size
+        self.inference_max_new_tokens = inference_max_new_tokens
+
+        self.formatter = RegressionFormatter(
+            representation_column="repr",
+            label_column="prop",
+            property_name=property_name,
+            num_digits=num_digits,
+        )
+        self.model = load_model()
 
 class BinnedGPTJRegressor(GPTJClassifier):
     """Wrapper around GPT-3 for "regression"
@@ -27,6 +64,7 @@ class BinnedGPTJRegressor(GPTJClassifier):
         inference_batch_size: int = 4,
         inference_max_new_tokens: int = 200,
         equal_bin_sizes: bool = True,
+        device=None
     ):
         self.property_name = property_name
         self.querier_settings = querier_settings
@@ -36,7 +74,7 @@ class BinnedGPTJRegressor(GPTJClassifier):
         self.tune_settings = tune_settings or {}
         self.inference_batch_size = inference_batch_size
         self.inference_max_new_tokens = inference_max_new_tokens
-        self.model = load_model()
+        self.model = load_model(device=device)
         self.equal_bin_sizes = equal_bin_sizes
     
     def _fit(self, formatted):
