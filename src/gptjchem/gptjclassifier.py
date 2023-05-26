@@ -164,11 +164,15 @@ class GPTJClassifier(GPTClassifier):
             X=X, temperature=temperature, do_sample=do_sample, formatted=formatted
         )
 
-        predictions = np.araay(predictions)
+        predictions = np.array(predictions).T
 
+        predictions_mode = np.array([np.argmax(np.bincount(pred)) for pred in predictions.astype(int)])
+        
         if return_std:
-            return np.mean(predictions, axis=1), np.std(predictions, axis=1)
-        return np.mean(predictions, axis=1)
+            predictions_std = np.array([np.std(pred) for pred in predictions.astype(int)])
+            return predictions_mode, predictions_std
+        return predictions_mode
+
 
     def _query(self, formatted_df, temperature, do_sample):
         completions = []
@@ -202,5 +206,7 @@ class GPTJClassifier(GPTClassifier):
                 len(completions)
             )  # ToDo: Make it possible to use other splitters than ###
         ]
+
+        filtered = [v if v is not None else np.nan for v in extracted]
 
         return extracted
