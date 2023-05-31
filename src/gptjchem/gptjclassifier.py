@@ -1,6 +1,6 @@
 import gc
 from typing import List, Optional
-
+from copy import deepcopy
 import numpy as np
 import pandas as pd
 import torch
@@ -80,14 +80,14 @@ class GPTJClassifier(GPTClassifier):
                 df = self._prepare_df(X, y)
                 formatted = self.formatter(df)
             elif X.ndim == 2 and X.size > len(X):
-                if not len(self.representation_names) == X.ndim:
+                if not len(self.representation_names) == X.shape[1]:
                     raise ValueError(
                         "Number of representation names must match number of dimensions"
                     )
 
                 dfs = []
                 for i in range(X.ndim):
-                    formatter = self.formatter.__copy__()
+                    formatter = deepcopy(self.formatter)
                     formatter.representation_name = self.representation_names[i]
                     df = self._prepare_df(X[:, i], y)
                     formatted = formatter(df)
@@ -130,14 +130,14 @@ class GPTJClassifier(GPTClassifier):
                 formatted = self.formatter(df)
                 dfs = [formatted]
             elif X.ndim == 2 and X.size > len(X):
-                if not len(self.representation_names) == X.ndim:
+                if not len(self.representation_names) == X.shape[1]:
                     raise ValueError(
                         "Number of representation names must match number of dimensions"
                     )
 
                 dfs = []
-                for i in range(X.ndim):
-                    formatter = self.formatter.__copy__()
+                for i in range(X.shape[1]):
+                    formatter = deepcopy(self.formatter)
                     formatter.representation_name = self.representation_names[i]
                     df = self._prepare_df(X[:, i], [0] * len(X))
                     formatted = formatter(df)
