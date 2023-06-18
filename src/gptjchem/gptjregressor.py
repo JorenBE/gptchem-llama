@@ -10,7 +10,7 @@ import torch
 from tqdm import tqdm
 from more_itertools import chunked
 
-class GPTRegressor(GPTJClassifier):
+class GPTJRegressor(GPTJClassifier):
     """Approximate regression by predicting rounded floats"""
     
     def __init__(self, 
