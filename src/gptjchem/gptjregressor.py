@@ -47,6 +47,7 @@ class GPTRegressor(GPTJClassifier):
         )
         self.model = load_model()
 
+
 class BinnedGPTJRegressor(GPTJClassifier):
     """Wrapper around GPT-3 for "regression"
     by binning the property values in sufficiently many bins.
