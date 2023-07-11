@@ -14,6 +14,7 @@ from typing import List
 LORA_TARGET_MODULES_MAPPING = {
     "alpaca_native": ["q_proj", "k_proj", "v_proj", "o_proj"], # llama-based -> decoder only
     "bigscience/bloom": ["query_key_value"], # decoder only 
+    "bigscience/bloom-3b": ["query_key_value"], # decoder only
     "microsoft/deberta-v2-xxlarge": ["query_proj", "value_proj"],
     "EleutherAI/gpt-neo-125m": ["q_proj", "v_proj"],
     "EleutherAI/gpt-neo-1.3B": ["q_proj", "v_proj"],
@@ -27,11 +28,13 @@ LORA_TARGET_MODULES_MAPPING = {
     "opt": ["q_proj", "v_proj"], # decoder only
     "deepset/roberta-base-squad2": ["query", "value"],
     "t5-base": ["q", "v"], # encoder - decoder
+    "tiiuae/falcon-7b": ["query_key_value"],
 }
 
 PADDING_SIDE_MAPPING = {
     "alpaca_native": "left",
     "bigscience/bloom": "left",
+    "bigscience/bloom-3b": "left",
     "gpt2": "left",
     "EleutherAI/gpt-neo-125m": "left",
     "EleutherAI/gpt-neo-1.3B": "left",
@@ -45,6 +48,7 @@ PADDING_SIDE_MAPPING = {
     "deepset/roberta-base-squad2": "right",
     "t5-base": "right",
     "opt": "left", 
+    "tiiuae/falcon-7b": "left",
 }
 
 
