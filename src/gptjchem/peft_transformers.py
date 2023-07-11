@@ -12,15 +12,9 @@ from typing import List
 
 # models have different conventions for naming the attention modules
 LORA_TARGET_MODULES_MAPPING = {
-    "alpaca_native": ["q_proj", "k_proj", "v_proj", "o_proj"],
-    "bart": ["q_proj", "v_proj"],
-    "bert-base-uncased": ["query", "value"],
-    "blip-2": ["q", "v", "q_proj", "v_proj"],
-    "bloom": ["query_key_value"],
-    "chatglm": ["query_key_value"],
-    "deberta-v2": ["query_proj", "value_proj"],
-    "deberta": ["in_proj"],
-    "electra": ["query", "value"],
+    "alpaca_native": ["q_proj", "k_proj", "v_proj", "o_proj"], # llama-based -> decoder only
+    "bigscience/bloom": ["query_key_value"], # decoder only 
+    "microsoft/deberta-v2-xxlarge": ["query_proj", "value_proj"],
     "EleutherAI/gpt-neo-125m": ["q_proj", "v_proj"],
     "EleutherAI/gpt-neo-1.3B": ["q_proj", "v_proj"],
     "EleutherAI/gpt-neo-2.7B": ["q_proj", "v_proj"],
@@ -29,32 +23,40 @@ LORA_TARGET_MODULES_MAPPING = {
     "EleutherAI/pythia-70m-deduped": ["query_key_value"],
     "gpt2": ["c_attn"],
     "EleutherAI/gpt-j-6b": ["q_proj", "v_proj"],
-    "layoutlm": ["query", "value"],
     "llama": ["q_proj", "v_proj"],
-    "mt5": ["q", "v"],
-    "opt": ["q_proj", "v_proj"],
-    "roberta": ["query", "value"],
-    "t5": ["q", "v"],
-    "xlm-roberta": ["query", "value"],
+    "opt": ["q_proj", "v_proj"], # decoder only
+    "deepset/roberta-base-squad2": ["query", "value"],
+    "t5-base": ["q", "v"], # encoder - decoder
+}
+
+PADDING_SIDE_MAPPING = {
+    "alpaca_native": "left",
+    "bigscience/bloom": "left",
+    "gpt2": "left",
+    "EleutherAI/gpt-neo-125m": "left",
+    "EleutherAI/gpt-neo-1.3B": "left",
+    "EleutherAI/gpt-neo-2.7B": "left",
+    "EleutherAI/gpt-neox-20b": "left",
+    "EleutherAI/pythia-12b": "left",
+    "EleutherAI/pythia-70m-deduped": "left",
+    "EleutherAI/gpt-j-6b": "left",
+    "llama": "left",
+    "microsoft/deberta-v2-xxlarge": "right",    
+    "deepset/roberta-base-squad2": "right",
+    "t5-base": "right",
+    "opt": "left", 
 }
 
 
-def freeze_and_cast(model):
-    """Freeze the model and cast small parameters to fp32 for stability."""
+def freeze(model):
+    """Freeze the model."""
     for param in model.parameters():
         param.requires_grad = False  # freeze the model - train adapters later
-        if param.ndim == 1:
-            # cast the small parameters (e.g. layernorm) to fp32 for stability
-            param.data = param.data.to(torch.float32)
 
     model.gradient_checkpointing_enable()  # reduce number of stored activations
     model.enable_input_require_grads()
 
-    class CastOutputToFloat(nn.Sequential):
-        def forward(self, x):
-            return super().forward(x).to(torch.float32)
 
-    model.lm_head = CastOutputToFloat(model.lm_head)
 
 
 def print_trainable_parameters(model):
@@ -75,6 +77,7 @@ def print_trainable_parameters(model):
 def load_model(base_model: str = "gptj", load_in_8bit: bool = True, lora_kwargs: dict = {}):
     tokenizer = AutoTokenizer.from_pretrained(base_model)
     tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = PADDING_SIDE_MAPPING[base_model]
 
     model = AutoModelForCausalLM.from_pretrained(
         base_model,
@@ -83,8 +86,7 @@ def load_model(base_model: str = "gptj", load_in_8bit: bool = True, lora_kwargs:
         device_map='sequential',
     )
 
-    if load_in_8bit:
-        freeze_and_cast(model)
+    freeze(model)
 
     lora_default_kwargs = {
         "r": 16,  # lora attention size
@@ -108,23 +110,23 @@ def load_model(base_model: str = "gptj", load_in_8bit: bool = True, lora_kwargs:
     return model, tokenizer
 
 
-def tokenize(prompt, tokenizer, cutoff_len=1024):
+def tokenize(prompt, tokenizer, cutoff_len=1024, return_tensors=None, padding=False, truncation=True):
     result = tokenizer(
         prompt,
-        truncation=True,
+        truncation=truncation,
         max_length=cutoff_len,
-        padding=False,
-        return_tensors=None,
+        padding=padding,
+        return_tensors=return_tensors,
     )
     return result
 
 
-def tokenize_prompt(data_point,  tokenizer, cutoff_len=1024, add_completion=True):
+def tokenize_prompt(data_point,  tokenizer, cutoff_len=1024, add_completion=True, return_tensors=None, padding=False, truncation=True):
     if add_completion:
         full_prompt = data_point["prompt"] + data_point["completion"]
     else:
         full_prompt = data_point["prompt"]
-    tokenized_full_prompt = tokenize(full_prompt, tokenizer=tokenizer, cutoff_len=cutoff_len)
+    tokenized_full_prompt = tokenize(full_prompt, tokenizer=tokenizer, cutoff_len=cutoff_len, return_tensors=return_tensors, padding=padding, truncation=truncation)
     return tokenized_full_prompt
 
 
@@ -156,7 +158,8 @@ def train_model(
         data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False),
     )
     model.config.use_cache = False  # silence the warnings. Please re-enable for inference!
-    trainer.train()
+    with torch.autocast('cuda' if torch.cuda.is_available() else 'cpu'):
+        trainer.train()
 
     if hub_model_name is not None:
         model.push_to_hub(hub_model_name)
@@ -166,23 +169,22 @@ def complete(
     model,
     tokenizer: AutoTokenizer,
     prompt_text: List[str],
-    max_length: int = 1024,
-    top_k: int = 50,
+    max_length: int = 50,
+    top_k: int = 1,
     top_p: float = 0.9,
     temperature: float = 1.0,
     do_sample: bool = False,
     repetition_penalty: float = 1.2,
     num_beams: int = 1,
+    padding: bool = True,
+    truncation: bool = True,
 ):
     model.eval()
-    device = model.device
     with torch.no_grad():
-        prompt = tokenizer(
-            prompt_text, truncation=True, padding=True, max_length=max_length, return_tensors="pt"
-        )
-        prompt = {key: value.to(device) for key, value in prompt.items()}
+        tokenize_partial = partial(tokenize,  tokenizer=tokenizer, cutoff_len=1024, return_tensors='pt', padding=padding, truncation=truncation)
+        prompt = tokenize_partial(prompt_text)
         out = model.generate(
-            **prompt,
+            inputs=prompt['input_ids'].to(model.device),
             max_length=max_length,
             top_k=top_k,
             top_p=top_p,
@@ -190,5 +192,6 @@ def complete(
             do_sample=do_sample,
             repetition_penalty=repetition_penalty,
             num_beams=num_beams,
+            attention_mask=prompt['attention_mask'].to(model.device),
         )
-        return {"out": out, "decoded": tokenizer.decode(out)}
+        return  [{'out': o, 'decoded': tokenizer.decode(o, skip_special_tokens=True)} for o in out]
