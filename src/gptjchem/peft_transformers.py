@@ -8,7 +8,8 @@ from datasets import Dataset
 import pandas as pd
 from functools import partial
 from typing import List 
-
+from tqdm import tqdm
+from more_itertools import chunked
 
 # models have different conventions for naming the attention modules
 LORA_TARGET_MODULES_MAPPING = {
@@ -141,6 +142,7 @@ def train_model(
     train_kwargs: dict = {},
     hub_model_name: str = None,
     report_to: str = None,
+    tokenizer_kwargs: dict = {}
 ):
     default_train_kwargs = {
         "per_device_train_batch_size": 128,
@@ -153,7 +155,7 @@ def train_model(
           "report_to": report_to,  # can be used for wandb tracking
     }
     train_kwargs = {**default_train_kwargs, **train_kwargs}
-    tokenize_partial = partial(tokenize_prompt, tokenizer=tokenizer)
+    tokenize_partial = partial(tokenize_prompt, tokenizer=tokenizer, **tokenizer_kwargs)
     train_data = Dataset.from_pandas(train_data).shuffle().map(tokenize_partial)
     trainer = transformers.Trainer(
         model=model,
@@ -182,20 +184,28 @@ def complete(
     num_beams: int = 1,
     padding: bool = True,
     truncation: bool = True,
-):
+    batch_size: int = 64,
+)->List[dict]:
     model.eval()
+    all_completions = []
     with torch.no_grad():
-        tokenize_partial = partial(tokenize,  tokenizer=tokenizer, cutoff_len=1024, return_tensors='pt', padding=padding, truncation=truncation)
-        prompt = tokenize_partial(prompt_text)
-        out = model.generate(
-            inputs=prompt['input_ids'].to(model.device),
-            max_length=max_length,
-            top_k=top_k,
-            top_p=top_p,
-            temperature=temperature,
-            do_sample=do_sample,
-            repetition_penalty=repetition_penalty,
-            num_beams=num_beams,
-            attention_mask=prompt['attention_mask'].to(model.device),
-        )
-        return  [{'out': o, 'decoded': tokenizer.decode(o, skip_special_tokens=True)} for o in out]
+        for chunk in tqdm(chunked(range(len(prompt_text)), batch_size), total=len(prompt_text) // batch_size):
+            batch = prompt_text[chunk]
+
+            tokenize_partial = partial(tokenize,  tokenizer=tokenizer, cutoff_len=1024, return_tensors='pt', padding=padding, truncation=truncation)
+            prompt = tokenize_partial(batch)
+            out = model.generate(
+                inputs=prompt['input_ids'].to(model.device),
+                max_length=max_length,
+                top_k=top_k,
+                top_p=top_p,
+                temperature=temperature,
+                do_sample=do_sample,
+                repetition_penalty=repetition_penalty,
+                num_beams=num_beams,
+                attention_mask=prompt['attention_mask'].to(model.device),
+            )
+            this_completion =   [{'out': o, 'decoded': tokenizer.decode(o, skip_special_tokens=True)} for o in out]
+            all_completions.extend(this_completion)
+
+    return all_completions
