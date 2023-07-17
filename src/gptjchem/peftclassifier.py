@@ -12,6 +12,7 @@ from numpy.typing import ArrayLike
 from tqdm import tqdm
 
 from gptjchem.peft_transformers import load_model, train_model, complete
+from gptjchem.utils import array_of_ints_without_nan, get_mode, try_exccept_nan
 from transformers.utils import logging
 
 
@@ -19,20 +20,18 @@ class PEFTClassifier(GPTClassifier):
     def __init__(
         self,
         property_name: str,
-        querier_settings: Optional[dict] = None,
         extractor: ClassificationExtractor = ClassificationExtractor(),
         batch_size: int = 64,
         tune_settings: Optional[dict] = None,
         inference_batch_size: int = 64,
         formatter: Optional[ClassificationFormatter] = None,
         representation_names: Optional[List[str]] = None,
-        base_model: str = "gptj",
+        base_model: str = "EleutherAI/gpt-j-6b",
         load_in_8bit: bool = True,
         lora_kwargs: dict = {},
         tokenizer_kwargs: dict = {},
     ):
         self.property_name = property_name
-        self.querier_settings = querier_settings
         self.extractor = extractor
         self.batch_size = batch_size
         self.tune_settings = tune_settings or {}
@@ -106,7 +105,7 @@ class PEFTClassifier(GPTClassifier):
         train_model(
             self.model,
             self.tokenizer,
-            formatted,
+            formatted[['prompt', 'completion']],
             train_kwargs=self.tune_settings,
             hub_model_name=None,
             report_to=None,
@@ -138,6 +137,9 @@ class PEFTClassifier(GPTClassifier):
 
         if formatted is None:
             if X.ndim == 1 or (X.ndim == 2 and X.size == len(X)):
+                # if pandas df or series is passed, convert to numpy array
+                if isinstance(X, pd.DataFrame) or isinstance(X, pd.Series):
+                    X = X.to_numpy()
                 df = self._prepare_df(X, [0] * len(X))
                 formatted = self.formatter(df)
                 dfs = [formatted]
@@ -178,18 +180,22 @@ class PEFTClassifier(GPTClassifier):
 
         predictions = np.array(predictions).T
 
+        # nan values make issues here
+        print(predictions)
         predictions_mode = np.array(
-            [np.argmax(np.bincount(pred)) for pred in predictions.astype(int)]
+            [try_exccept_nan(get_mode, pred) for pred in predictions.astype(int)]
         )
 
         if return_std:
+            
             predictions_std = np.array([np.std(pred) for pred in predictions.astype(int)])
             return predictions_mode, predictions_std
         return predictions_mode
 
     def _query(self, formatted_df, temperature, do_sample):
         if temperature > 0 and not do_sample:
-            logging.warning(
+            logger = logging.get_logger("transformers")
+            logger.warning(
                 "Temperature > 0 but do_sample is False. This will result in deterministic predictions. Set do_sample=True to sample from the distribution."
             )
         completions = complete(
@@ -202,7 +208,6 @@ class PEFTClassifier(GPTClassifier):
         )
 
         completions = [c["decoded"] for c in completions]
-
         extracted = [
             self.extractor.extract(completions[i].split("###")[1])
             for i in range(

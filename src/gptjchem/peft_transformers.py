@@ -21,7 +21,13 @@ LORA_TARGET_MODULES_MAPPING = {
     "EleutherAI/gpt-neo-1.3B": ["q_proj", "v_proj"],
     "EleutherAI/gpt-neo-2.7B": ["q_proj", "v_proj"],
     "EleutherAI/gpt-neox-20b": ["query_key_value"],
-    "EleutherAI/pythia-12b": ["query_key_value"],
+    "EleutherAI/pythia-12b-deduped": ["query_key_value"],
+    "EleutherAI/pythia-6.9b-deduped": ["query_key_value"], # decoder only
+    "EleutherAI/pythia-2.8b-deduped": ["query_key_value"], # decoder only
+    "EleutherAI/pythia-1.4b-deduped": ["query_key_value"], # decoder only
+    "EleutherAI/pythia-1b-deduped": ["query_key_value"], # decoder only
+    "EleutherAI/pythia-410m-deduped": ["query_key_value"], # decoder only
+    "EleutherAI/pythia-160m-deduped": ["query_key_value"], # decoder only
     "EleutherAI/pythia-70m-deduped": ["query_key_value"],
     "gpt2": ["c_attn"],
     "EleutherAI/gpt-j-6b": ["q_proj", "v_proj"],
@@ -41,7 +47,13 @@ PADDING_SIDE_MAPPING = {
     "EleutherAI/gpt-neo-1.3B": "left",
     "EleutherAI/gpt-neo-2.7B": "left",
     "EleutherAI/gpt-neox-20b": "left",
-    "EleutherAI/pythia-12b": "left",
+    "EleutherAI/pythia-12b-dedupedz``": "left",
+    "EleutherAI/pythia-6.9b-deduped": "left",
+    "EleutherAI/pythia-2.8b-deduped": "left",
+    "EleutherAI/pythia-1.4b-deduped": "left",
+    "EleutherAI/pythia-1b-deduped": "left",
+    "EleutherAI/pythia-410m-deduped": "left",
+    "EleutherAI/pythia-160m-deduped": "left",   
     "EleutherAI/pythia-70m-deduped": "left",
     "EleutherAI/gpt-j-6b": "left",
     "llama": "left",
@@ -190,7 +202,7 @@ def complete(
     all_completions = []
     with torch.no_grad():
         for chunk in tqdm(chunked(range(len(prompt_text)), batch_size), total=len(prompt_text) // batch_size):
-            batch = prompt_text[chunk]
+            batch = [prompt_text[i] for i in chunk]
 
             tokenize_partial = partial(tokenize,  tokenizer=tokenizer, cutoff_len=1024, return_tensors='pt', padding=padding, truncation=truncation)
             prompt = tokenize_partial(batch)
