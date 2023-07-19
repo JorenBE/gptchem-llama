@@ -12,8 +12,11 @@ from numpy.typing import ArrayLike
 from tqdm import tqdm
 
 from gptjchem.peft_transformers import load_model, train_model, complete
-from gptjchem.utils import array_of_ints_without_nan, get_mode, try_exccept_nan
+from gptjchem.utils import array_of_ints_without_nan, get_mode, try_exccept_nan, augment_smiles
 from transformers.utils import logging
+
+
+
 
 
 class PEFTClassifier(GPTClassifier):
@@ -181,7 +184,6 @@ class PEFTClassifier(GPTClassifier):
         predictions = np.array(predictions).T
 
         # nan values make issues here
-        print(predictions)
         predictions_mode = np.array(
             [try_exccept_nan(get_mode, pred) for pred in predictions.astype(int)]
         )
@@ -218,3 +220,75 @@ class PEFTClassifier(GPTClassifier):
         filtered = [v if v is not None else np.nan for v in extracted]
 
         return filtered
+
+
+
+class SMILESAugmentedPEFTClassifier(PEFTClassifier):
+    def fit(
+        self,
+        X: Optional[ArrayLike] = None,
+        y: Optional[ArrayLike] = None,
+        augmentation_rounds: int = 10, 
+        deduplicate: bool = True,
+        include_original: bool = True,
+    ) -> None:
+        """Fine tune a GPT-3 model on a dataset.
+
+        Args:
+            X (ArrayLike): Input data (typically array of molecular representations)
+            y (ArrayLike): Target data (typically array of property values)
+            augmentation_rounds (int): Number of rounds of augmentation to perform
+            deduplicate (bool): Whether to deduplicate the augmented data
+            include_original (bool): Whether to include the original data in the training set
+        """
+        x_augmented = []
+        y_augmented = []
+
+        if augmentation_rounds > 1:
+            for smiles, label in zip(X, y): 
+                augmented = augment_smiles(smiles, int_aug=augmentation_rounds, deduplicate=deduplicate)
+                y_augmented.extend([label] * len(augmented))
+                x_augmented.extend(augmented)
+        else:
+            x_augmented = X
+            y_augmented = y
+        
+        if include_original:
+            x_augmented.extend(X)
+            y_augmented.extend(y)
+        
+        # shuffle
+        x_augmented = np.array(x_augmented)
+        y_augmented = np.array(y_augmented)
+        idx = np.random.permutation(len(x_augmented))
+        x_augmented = x_augmented[idx]
+        y_augmented = y_augmented[idx]
+
+        super().fit(X=x_augmented, y=y_augmented)
+    
+    def _predict(self,  X: Optional[ArrayLike] = None, temperature=0.7, do_sample=False, augmentation_rounds: int = 0, deduplicate: bool = True, include_original: bool = True):
+        # we need to also keep track of canonical smiles to be able to aggregate:        
+        compiled_predictions = []
+
+        for smiles in X: 
+            if augmentation_rounds > 1:
+                augmented = augment_smiles(smiles, int_aug=augmentation_rounds, deduplicate=deduplicate)
+                if include_original:
+                    augmented.append(smiles)
+            else:
+                augmented = [smiles]
+            augmented = np.array(augmented)
+            predictions  = super()._predict(X=augmented, temperature=temperature, do_sample=do_sample)[0]
+            compiled_predictions.append(predictions)
+
+        return compiled_predictions
+
+
+    def predict(self, X: Optional[ArrayLike] = None, temperature=0.7, do_sample=False, augmentation_rounds: int = 0, deduplicate: bool = True, include_original: bool = True): 
+        predictions = self._predict(X=X, temperature=temperature, do_sample=do_sample, augmentation_rounds=augmentation_rounds, deduplicate=deduplicate, include_original=include_original)
+
+        # nan values make issues here
+        predictions_mode = np.array([try_exccept_nan(get_mode, np.array(pred).astype(int)) for pred in predictions])
+        predictions_std = np.array([np.std(pred) for pred in predictions])
+        return predictions_mode, predictions_std
+
