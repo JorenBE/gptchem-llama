@@ -1,5 +1,4 @@
-import gc
-from typing import List, Optional
+from typing import List, Optional, Union
 from copy import deepcopy
 import numpy as np
 import pandas as pd
@@ -11,13 +10,11 @@ from more_itertools import chunked
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
-from gptjchem.peft_transformers import load_model, train_model, complete
+from gptjchem.peft_transformers import load_model, train_model, complete, tokenize
 from gptjchem.utils import array_of_ints_without_nan, get_mode, try_exccept_nan, augment_smiles
 from transformers.utils import logging
-
-
-
-
+from functools import partial
+from peft.utils.save_and_load import set_peft_model_state_dict
 
 class PEFTClassifier(GPTClassifier):
     def __init__(
@@ -66,6 +63,73 @@ class PEFTClassifier(GPTClassifier):
             rows.append({"repr": X[i], "prop": y[i]})
         return pd.DataFrame(rows)
 
+    def return_embeddings(self, X: ArrayLike, layers: Optional[Union[int, List[int]]] = -1, padding: bool = True, truncation: bool = True, insert_in_template: bool =True):
+        """Return embeddings for a set of molecular representations.
+
+        Args:
+            X (ArrayLike): Input data (typically array of molecular representations)
+            layers (Optional[Union[int, List[int]]], optional): Layers to return embeddings from. 
+                Defaults to -1.
+            padding (bool, optional): Whether to pad the input. Defaults to True.
+            truncation (bool, optional): Whether to truncate the input. Defaults to True.
+            insert_in_template (bool, optional): Whether to insert the input in the template. Defaults to True.
+
+        Returns:
+            ArrayLike: Embeddings
+        """
+        if insert_in_template:
+            X = np.array(X)
+            if X.ndim == 1 or (X.ndim == 2 and X.size == len(X)):
+                df = self._prepare_df(X, [0] * len(X))
+                formatted = self.formatter(df)
+            elif X.ndim == 2 and X.size > len(X):
+                if not len(self.representation_names) == X.shape[1]:
+                    raise ValueError(
+                        "Number of representation names must match number of dimensions"
+                    )
+
+                dfs = []
+                for i in range(X.shape[1]):
+                    formatter = deepcopy(self.formatter)
+                    formatter.representation_name = self.representation_names[i]
+                    df = self._prepare_df(X[:, i], [0] * len(X))
+                    formatted = formatter(df)
+                    dfs.append(formatted)
+
+                formatted = pd.concat(dfs)
+                prompt_text = formatted["prompt"].to_list()
+        else:
+            prompt_text = X
+
+        embeddings = []
+
+        with torch.no_grad():
+            for chunk in tqdm(chunked(range(len(prompt_text)), self.inference_batch_size), total=len(prompt_text) // self.inference_batch_size):
+
+                batch = [prompt_text[i] for i in chunk]
+
+                tokenize_partial = partial(tokenize,  tokenizer=self.tokenizer, cutoff_len=1024, return_tensors='pt', padding=padding, truncation=truncation)
+                prompt = tokenize_partial(batch)
+                outs = self.model.forward(prompt['input_ids'], output_hidden_states=True)
+                if isinstance(layers, int):
+                    embeddings.append(outs.hidden_states[layers].cpu().numpy())
+                else:
+                    embeddings.append(
+                        [outs.hidden_states[i].cpu().numpy() for i in layers]
+                    )
+        # flatten the batch dim        
+        embeddings = np.concatenate(embeddings, axis=0)
+
+        return embeddings
+
+    def load_state_dict(self, checkpoint_path: str):
+        """Load model from checkpoint.
+
+        Args:
+            checkpoint_path (str): Path to checkpoint
+        """
+        set_peft_model_state_dict(self.model, torch.load(checkpoint_path))
+
     def fit(
         self,
         X: Optional[ArrayLike] = None,
@@ -104,7 +168,6 @@ class PEFTClassifier(GPTClassifier):
                     dfs.append(formatted)
 
                 formatted = pd.concat(dfs)
-
         train_model(
             self.model,
             self.tokenizer,
@@ -117,7 +180,7 @@ class PEFTClassifier(GPTClassifier):
     def _predict(
         self,
         X: Optional[ArrayLike] = None,
-        temperature=0.7,
+        temperature=0.0,
         do_sample=False,
         formatted: Optional[pd.DataFrame] = None,
     ) -> ArrayLike:
@@ -207,9 +270,11 @@ class PEFTClassifier(GPTClassifier):
             max_length=self.tokenizer_kwargs["cutoff_len"],
             do_sample=do_sample,
             temperature=temperature,
+            batch_size=self.inference_batch_size,
         )
 
         completions = [c["decoded"] for c in completions]
+        print('completions', completions)
         extracted = [
             self.extractor.extract(completions[i].split("###")[1])
             for i in range(

@@ -217,6 +217,7 @@ def complete(
                 num_beams=num_beams,
                 attention_mask=prompt['attention_mask'].to(model.device),
             )
+
             this_completion =   [{'out': o, 'decoded': tokenizer.decode(o, skip_special_tokens=True)} for o in out]
             all_completions.extend(this_completion)
 
