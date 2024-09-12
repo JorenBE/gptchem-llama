@@ -3,7 +3,6 @@ from rdkit import Chem
 import selfies as sf
 import time 
 
-import deepsmiles
 import requests
 
 def array_of_ints_without_nan(arr):

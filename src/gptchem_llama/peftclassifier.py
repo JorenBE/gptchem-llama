@@ -10,8 +10,8 @@ from more_itertools import chunked
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
-from gptjchem.peft_transformers import load_model, train_model, complete, tokenize
-from gptjchem.utils import array_of_ints_without_nan, get_mode, try_exccept_nan, augment_smiles
+from gptchem_llama.peft_transformers import load_model, train_model, complete, tokenize
+from gptchem_llama.utils import array_of_ints_without_nan, get_mode, try_exccept_nan, augment_smiles
 from transformers.utils import logging
 from functools import partial
 from peft.utils.save_and_load import set_peft_model_state_dict

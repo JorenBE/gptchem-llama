@@ -1,3 +1,6 @@
+import os
+os.environ['TRANSFORMERS_CACHE'] = '/data/joren/HF_home'
+
 import torch
 import torch.nn as nn
 import bitsandbytes as bnb
@@ -31,7 +34,9 @@ LORA_TARGET_MODULES_MAPPING = {
     "EleutherAI/pythia-70m-deduped": ["query_key_value"],
     "gpt2": ["c_attn"],
     "EleutherAI/gpt-j-6b": ["q_proj", "v_proj"],
+    "mistralai/Mistral-7B-Instruct-v0.3": ["q_proj", "v_proj"],
     "llama": ["q_proj", "v_proj"],
+    "meta-llama/Meta-Llama-3.1-8B-Instruct": ["q_proj", "v_proj"],
     "opt": ["q_proj", "v_proj"], # decoder only
     "deepset/roberta-base-squad2": ["query", "value"],
     "t5-base": ["q", "v"], # encoder - decoder
@@ -62,6 +67,8 @@ PADDING_SIDE_MAPPING = {
     "t5-base": "right",
     "opt": "left", 
     "tiiuae/falcon-7b": "left",
+    "meta-llama/Meta-Llama-3.1-8B-Instruct": "left",
+    "mistralai/Mistral-7B-Instruct-v0.3": "left"
 }
 
 

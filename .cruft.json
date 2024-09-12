@@ -4,9 +4,9 @@
   "checkout": null,
   "context": {
     "cookiecutter": {
-      "package_name": "gptjchem",
-      "package_name_stylized": "gptjchem",
-      "short_description": "GPT-J for chemistry ",
+      "package_name": "gptchem_llama",
+      "package_name_stylized": "gptchem_llama",
+      "short_description": "llama for chemistry ",
       "author_name": "Kevin M. Jablonka",
       "author_email": "mail@kjablonka.com",
       "github_organization_name": "kjappelbaum",
