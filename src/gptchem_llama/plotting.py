@@ -1,15 +1,16 @@
 import sys
 import matplotlib.pyplot as plt
 from scipy.constants import golden
+try:
+    import sys
+    sys.path.append("/home/jorenvanherck/Documents/gptchallengeV2/gptchem-gptj/plotutils/")
+    from plotutils import *
 
-sys.path.append("/home/joren/chemGPT/gptchem-llama/src/gptchem_llama/plotutils")
+    plt.style.use("/home/jorenvanherck/Documents/gptchallengeV2/gptchem-gptj/plotutils/kevin.mplstyle")
 
-from plotutils import *
-
-plt.style.use("/home/joren/chemGPT/gptchem-llama/src/gptchem_llama/plotutils/kevin.mplstyle")
-
-print('Matplotlib parameters: activated')
-
+    print('Matplotlib parameters: activated')
+except:
+    print('Could not activate Matplotlib parameters')
 ONE_COL_WIDTH_INCH = 5
 TWO_COL_WIDTH_INCH = 7.2
 

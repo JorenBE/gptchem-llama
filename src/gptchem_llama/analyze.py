@@ -6,10 +6,15 @@ from scipy.stats import sem
 from scipy.constants import golden
 import matplotlib.pyplot as plt
 from datetime import datetime
+import matplotx
+import ast
 
 MODEL_DICT = {'meta-llama/Meta-Llama-3.1-8B-Instruct':'Llama',
               'EleutherAI/gpt-j-6b': 'GPT-J',
-              'mistralai/Mistral-7B-Instruct-v0.3': 'mistral'}
+              'mistralai/Mistral-7B-Instruct-v0.3': 'mistral',
+              'RandomForestClassifier': 'RF',
+            'XGBClassifier' : 'XGBoost'
+              }
 
 
 ANALYSIS_COLS = ['train_size', 'representation', 'target', 'accuracy', 'f1_macro', 'f1_micro', 'kappa', 'n_epochs', 'lr', 'n_bins', 'test_size']
@@ -26,9 +31,21 @@ class OutFolder():
         self.n_files = len(os.listdir(self.folder))
         self.pickles:list = glob(f'{self.folder}/*.pkl')
 
-    def get_df(self, df_type = 'all', grouped = True):
-
+    def get_df(self, df_type = 'all', grouped = True, exclude = {}):
+        '''
+        param:
+        ------
+        df_type: all, analysis or info
+            return type of data frame
+        grouped: bool
+            group metrics if True
+        exclude: dict
+            excludes the given values (dict values) from the given col (dict keys),
+            e.g., {'train size': [5]} excludes all entries with training size 5
+        '''
         df = pd.DataFrame([OutPickle(p).__dict__ for p in self.pickles])
+        for col, values in exclude.items():
+            df = df.loc[~df[col].isin(values)]
         if df_type == 'all':
             return df
         elif df_type == 'analysis':
@@ -47,9 +64,11 @@ class OutFolder():
                       representation = None,
                       target = None,
                       ax = None, 
-                      n_epochs = None):
-        df = self.get_df(df_type='analysis', grouped = True)
-        df_all = self.get_df(df_type='all', grouped=False)
+                      n_epochs = None,
+                      onlyModelLabel = True,
+                      exclude = {}):
+        df = self.get_df(df_type='analysis', grouped = True, exclude=exclude)
+        df_all = self.get_df(df_type='all', grouped=False, exclude= exclude)
         
         ONE_COL_WIDTH_INCH = 5
         TWO_COL_WIDTH_INCH = 7.2
@@ -89,11 +108,15 @@ class OutFolder():
                 raise ValueError(f'4 axes needs to be available for plotting all metrics. {len(ax)} are given.')
         for num_epochs in n_epochs:
             for i, metric in enumerate(['accuracy', 'f1_macro', 'f1_micro', 'kappa']):
+                if onlyModelLabel:
+                    plot_label = f"{df_all['model_short'].unique()[0]}"
+                else: 
+                    plot_label = f"{df_all['model_short'].unique()[0]} {num_epochs} epochs"
                 ax[i].plot(
                         df.loc[bins, num_epochs,representation, target].index, 
                         df.loc[bins, num_epochs,representation, target][metric]['mean'],
                         marker='o',
-                        label=f"{df_all['model_short'].unique()[0]} {num_epochs} epochs"
+                        label=plot_label
                                 )
                 ax[i].fill_between(
                     df.loc[bins, num_epochs,representation,target].index,
@@ -111,12 +134,16 @@ class OutFolder():
                 #ylabel_top(r'F$_1$ micro', ax=ax[2])
                 #ylabel_top(r'$\kappa$', ax=ax[3])
         ax[-1].set_xlabel('training set size')
-        ax[0].legend(loc='upper left', bbox_to_anchor=(1, 1))
+        #ax[0].legend(loc='upper left', bbox_to_anchor=(1, 1))
 
         #matplotx.line_labels(ax[0])
         now = datetime.now().strftime('%Y%m%d_%H%M') 
         #fig.suptitle('Hydrides - {} - {}'.format(REPRESENTATION, 'binary'), fontsize=16)
         #fig.savefig(f'{now}_AdhesiveFreeE-{REPRESENTATION}-binary-{BINS}bin-classification-results.pdf', bbox_inches='tight')
+
+    def add_zero_rule(self, ax, color = 'gray', exclude = {}):
+        train_sizes = self.get_df(df_type='all', exclude = exclude)['train_size'].unique()
+        ax[0].plot(train_sizes, [0.5] * len(train_sizes), label = 'zero-rule', linestyle = '--', color = color, alpha = 0.3)
 
 class OutPickle():
     def __init__(self, file:str) -> None:
@@ -162,3 +189,41 @@ class OutPickle():
         self.representation = self.content['data_summary']['representation']
 
         self.n_bins = len(list(set(self.trues)))
+
+
+def add_traditional_ml(ax, file, 
+                       modeltypes = ['RandomForestClassifier', 'XGBClassifier'], 
+                       target = 'y_bin', 
+                       num_epochs = 4,
+                       onlyModelLabel = True
+                       ):
+    df_ml_all = pd.read_csv(file)
+    
+    df_ml_all['target'] = [ ast.literal_eval(l)[0] for l in df_ml_all['target']]
+    for modeltype in modeltypes:
+        df_ml = df_ml_all.loc[df_ml_all['modeltype'] == modeltype][['modeltype','target','train_size','accuracy','f1_macro','f1_micro','kappa']]
+        df_ml_grouped =df_ml.groupby(['modeltype', 'target', 'train_size']).agg(['mean', 'sem'])
+        display(df_ml_grouped)
+        if onlyModelLabel:
+            plot_label = MODEL_DICT[modeltype]
+        else:
+            plot_label = f'{modeltype} {num_epochs} epochs'
+
+        for i, metric in enumerate(['accuracy', 'f1_macro', 'f1_micro', 'kappa']):
+            ax[i].plot(
+                df_ml_grouped.loc[modeltype,target].index, 
+                df_ml_grouped.loc[modeltype,target][metric]['mean'],
+                marker='o',
+                label=plot_label,
+                color = 'gray',
+                alpha = 0.3
+            )
+            ax[i].fill_between(
+                df_ml_grouped.loc[modeltype,target].index,
+                df_ml_grouped.loc[modeltype,target][metric]['mean'] - df_ml_grouped.loc[modeltype,target][metric]['sem'],
+                df_ml_grouped.loc[modeltype,target][metric]['mean'] + df_ml_grouped.loc[modeltype,target][metric]['sem'],
+                color = 'k',
+                alpha=0.05
+            )
+    return ax
+
